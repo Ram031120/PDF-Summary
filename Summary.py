@@ -1,41 +1,32 @@
 import streamlit as st
-import fitz  # PyMuPDF for extracting text
-from sumy.parsers.plaintext import PlaintextParser
-from sumy.nlp.tokenizers import Tokenizer
-from sumy.summarizers.lsa import LsaSummarizer
+import pandas as pd
+from io import BytesIO
 
-def extract_text_from_pdf(pdf_file):
-    """Extract text from a PDF file."""
-    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    text = "".join([page.get_text("text") for page in doc])
-    return text
-
-def summarize_text(text, num_sentences=5):
-    """Summarize the extracted text."""
-    parser = PlaintextParser.from_string(text, Tokenizer("english"))
-    summarizer = LsaSummarizer()
-    summary = summarizer(parser.document, num_sentences)
-    return " ".join(str(sentence) for sentence in summary)
+def save_to_excel(dataframe, filename):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        dataframe.to_excel(writer, index=False, sheet_name='Sheet1')
+    processed_data = output.getvalue()
+    st.download_button(label="Download Processed File", data=processed_data, file_name=filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 def main():
-    st.title("PDF Summarizer")
-    st.write("Upload a PDF and get a summarized version of its content.")
+    st.title("Excel Data Extractor & Transfer Tool")
     
-    uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
+    uploaded_file = st.file_uploader("Upload your source Excel file", type=["xls", "xlsx"])
     if uploaded_file is not None:
-        with st.spinner("Extracting text..."):
-            text = extract_text_from_pdf(uploaded_file)
+        df = pd.read_excel(uploaded_file)
+        st.write("Preview of Uploaded Data:")
+        st.dataframe(df.head())
+        
+        st.write("### Select Columns to Transfer")
+        selected_columns = st.multiselect("Choose columns", df.columns.tolist())
+        
+        if selected_columns:
+            filtered_df = df[selected_columns]
+            st.write("Preview of Selected Data:")
+            st.dataframe(filtered_df)
             
-        if text:
-            num_sentences = st.slider("Number of summary sentences", 1, 10, 5)
-            
-            with st.spinner("Generating summary..."):
-                summary = summarize_text(text, num_sentences)
-                
-            st.subheader("Summary:")
-            st.write(summary)
-        else:
-            st.error("Could not extract text from the PDF. Make sure it's not a scanned document.")
+            save_to_excel(filtered_df, "transferred_data.xlsx")
 
 if __name__ == "__main__":
     main()
